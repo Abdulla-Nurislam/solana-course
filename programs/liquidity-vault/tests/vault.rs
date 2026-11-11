@@ -737,4 +737,93 @@ fn week12_and_week13_strategy_swap_and_position_guards() {
         "got {}",
         wrong_vault_err
     );
+
+    // Проверка защит позиции (Неделя 13): неверный диапазон тиков и вызов collect_fees без открытой позиции
+    let nft_mint = Keypair::new();
+    let nft_mint_pk = Pubkey::new_from_array(nft_mint.pubkey().to_bytes());
+    let bad_range_err = send_ix(
+        &mut svm,
+        &[&admin, &nft_mint],
+        Instruction {
+            program_id: liquidity_vault::id(),
+            accounts: accounts::OpenVaultPosition {
+                admin: admin_pk,
+                vault,
+                strategy,
+                position_nft_mint: nft_mint_pk,
+                position_nft_account: Pubkey::new_unique(),
+                pool_state,
+                protocol_position: Pubkey::new_unique(),
+                tick_array_lower: Pubkey::new_unique(),
+                tick_array_upper: Pubkey::new_unique(),
+                personal_position: Pubkey::new_unique(),
+                token_vault,
+                secondary_vault,
+                pool_vault_0,
+                pool_vault_1,
+                deposit_mint,
+                secondary_mint,
+                clmm_program,
+                rent: rent_sysvar(),
+                system_program: system_program::ID,
+                token_program: token_program(),
+                associated_token_program: ata_program(),
+                token_program_2022: token_2022_program(),
+            }
+            .to_account_metas(None),
+            data: instruction::OpenPosition {
+                tick_lower_index: 600,
+                tick_upper_index: -600, // lower >= upper
+                tick_array_lower_start_index: 0,
+                tick_array_upper_start_index: -3600,
+                liquidity: 10_000,
+                amount_0_max: 100 * ONE_TOKEN,
+                amount_1_max: 100 * ONE_TOKEN,
+            }
+            .data(),
+        },
+    )
+    .unwrap_err();
+    assert!(
+        bad_range_err.contains(&custom_err(VaultError::InvalidTickRange)),
+        "got {}",
+        bad_range_err
+    );
+
+    let no_pos_err = send_ix(
+        &mut svm,
+        &[&admin],
+        Instruction {
+            program_id: liquidity_vault::id(),
+            accounts: accounts::CollectVaultFees {
+                admin: admin_pk,
+                vault,
+                strategy,
+                position_nft_account: Pubkey::new_unique(),
+                personal_position: Pubkey::new_unique(),
+                pool_state,
+                protocol_position: Pubkey::new_unique(),
+                pool_vault_0,
+                pool_vault_1,
+                tick_array_lower: Pubkey::new_unique(),
+                tick_array_upper: Pubkey::new_unique(),
+                token_vault,
+                secondary_vault,
+                deposit_mint,
+                secondary_mint,
+                clmm_program,
+                token_program: token_program(),
+                token_program_2022: token_2022_program(),
+                memo_program: memo_program(),
+            }
+            .to_account_metas(None),
+            data: instruction::CollectFees {}.data(),
+        },
+    )
+    .unwrap_err();
+    assert!(
+        no_pos_err.contains(&custom_err(VaultError::NoActivePosition)),
+        "got {}",
+        no_pos_err
+    );
 }

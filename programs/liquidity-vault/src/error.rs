@@ -31,4 +31,12 @@ pub enum VaultError {
     #[msg("Slippage tolerance exceeded: received less than minimum required")]
     SlippageExceeded,
     #[msg("Invalid tick range: tick_lower must be strictly less than tick_upper")]
+    InvalidTickRange,
+    #[msg("Strategy already has an active CLMM position")]
+    PositionAlreadyActive,
+    #[msg("Strategy does not have an active CLMM position")]
+    NoActivePosition,
+    #[msg("Invalid Raydium PersonalPositionState account")]
+    InvalidPersonalPosition,
 }
+
