@@ -17,6 +17,9 @@ cargo test -p liquidity-vault --test vault
 cargo run -p vault-client -- init --cluster devnet
 cargo run -p vault-client -- card --cluster devnet
 cargo run -p vault-client -- show --cluster devnet
+
+# Неделя 9: депозит 1000 токенов
+cargo run -p vault-client -- deposit --amount 1000 --cluster devnet
 ```
 
 ---
@@ -56,3 +59,16 @@ flowchart TD
 - **Деплой программы `liquidity_vault`**: [`4ZqotemkmCrHngZYCJzBKXoZBmgCCU9BU5dPoPFHJtZNV2pKnsGEGiZWjmvzbCSzQiu38mC65tdyXtQQ2jNbr861`](https://explorer.solana.com/tx/4ZqotemkmCrHngZYCJzBKXoZBmgCCU9BU5dPoPFHJtZNV2pKnsGEGiZWjmvzbCSzQiu38mC65tdyXtQQ2jNbr861?cluster=devnet)
 - **Инициализация хранилища (`initialize_vault`)**: [`XQCpG81bjLAwqrhCf4T8GSna3eT9hXhWBkPxALgW5z78oSwpp4MKwsoaYqSEBer6PQs25P7uPHEh97u3jP3Pqwu`](https://explorer.solana.com/tx/XQCpG81bjLAwqrhCf4T8GSna3eT9hXhWBkPxALgW5z78oSwpp4MKwsoaYqSEBer6PQs25P7uPHEh97u3jP3Pqwu?cluster=devnet)
 - **Создание карточки пользователя (`create_user_card`)**: [`3NDDdSVre3m4qVDzW6fzLSjGDv7V7Bx7HNCKwiSHbQmANnnubHhVQ3p5BC1ttv8zXBeqKnHwXP9gD8S5DUZ6pfQQ`](https://explorer.solana.com/tx/3NDDdSVre3m4qVDzW6fzLSjGDv7V7Bx7HNCKwiSHbQmANnnubHhVQ3p5BC1ttv8zXBeqKnHwXP9gD8S5DUZ6pfQQ?cluster=devnet)
+
+---
+
+## 4. Неделя 9 — Депозит и математика долей (Share Tokens)
+
+### Формула расчёта долей
+В модуле `programs/liquidity-vault/src/math.rs` реализована функция `calculate_shares_to_mint`:
+- При пустом хранилище (`total_shares == 0` или `vault_balance == 0`) доли выпускаются `1:1`.
+- При последующих депозитах расчёт выполняется в `u128` с округлением вниз (в пользу хранилища):
+  $$\text{shares} = \left\lfloor \frac{\text{amount} \times \text{total\_shares}}{\text{vault\_balance}} \right\rfloor$$
+
+### Транзакция Недели 9 в Solana Devnet
+- **Депозит `1000.0` токенов (`deposit`)**: [`MByYftZVVVcxMiacMW5vjQMgLzhHT5CPMau1hULKzSnoFvmBYpG7hUTEd5bh7qb5QcFrpvqhWbr4nTYuJGApQKu`](https://explorer.solana.com/tx/MByYftZVVVcxMiacMW5vjQMgLzhHT5CPMau1hULKzSnoFvmBYpG7hUTEd5bh7qb5QcFrpvqhWbr4nTYuJGApQKu?cluster=devnet)

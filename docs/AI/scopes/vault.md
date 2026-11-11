@@ -6,7 +6,7 @@
 - `programs/liquidity-vault` — ончейн-программа на Anchor `1.2.0` (`anchor-spl = 1.2.2`).
 - `clients/vault-client` — CLI-клиент на Rust для управления хранилищем.
 
-## 2. Сборка SBF и тесты
+## 2. Сборка SBF и локальный валидатор / тесты
 
 1. Сборка SBF-бинарника программы:
    ```bash
@@ -16,8 +16,9 @@
    ```bash
    cargo test -p liquidity-vault --test vault
    ```
-3. Деплой в `devnet`:
+3. Деплой в локальный валидатор (`solana-test-validator`) или в `devnet`:
    ```bash
+   solana-test-validator --reset
    solana program deploy target/deploy/liquidity_vault.so \
      --program-id target/deploy/liquidity_vault-keypair.json \
      --url devnet

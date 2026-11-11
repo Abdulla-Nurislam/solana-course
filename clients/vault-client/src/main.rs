@@ -63,6 +63,10 @@ fn main() -> Result<()> {
         "init" => vault::cmd_init_vault(&rpc, &wallet, &mint)?,
         "card" => vault::cmd_create_card(&rpc, &wallet, &mint)?,
         "show" => vault::cmd_show_vault(&rpc, &wallet, &mint)?,
+        "deposit" => {
+            let amount = parse_flag_value(&args, "--amount").ok_or_else(|| anyhow!("Missing --amount"))?;
+            vault::cmd_deposit(&rpc, &wallet, &mint, &amount)?;
+        }
         other => bail!("Unknown command '{}'", other),
     }
     Ok(())

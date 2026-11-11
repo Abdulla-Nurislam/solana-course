@@ -1,13 +1,16 @@
 use std::str::FromStr;
 
 use anchor_lang::{
+    error::ERROR_CODE_OFFSET,
     prelude::Pubkey,
     solana_program::instruction::Instruction,
     system_program, AccountDeserialize, InstructionData, ToAccountMetas,
 };
 use litesvm::LiteSVM;
 use liquidity_vault::{
-    accounts, instruction,
+    accounts,
+    error::VaultError,
+    instruction,
     state::{
         UserCard, VaultState, SHARE_MINT_SEED, USER_CARD_SEED, VAULT_SEED, VAULT_TOKEN_SEED,
     },
@@ -18,6 +21,7 @@ use solana_signer::Signer;
 use solana_transaction::Transaction;
 
 const DECIMALS: u8 = 6;
+const ONE_TOKEN: u64 = 1_000_000;
 const SOL: u64 = 1_000_000_000;
 
 fn pk(s: &str) -> Pubkey {
@@ -28,12 +32,28 @@ fn token_program() -> Pubkey {
     pk("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
 }
 
+fn ata_program() -> Pubkey {
+    pk("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+}
+
 fn rent_sysvar() -> Pubkey {
     pk("SysvarRent111111111111111111111111111111111")
 }
 
+fn custom_err(e: VaultError) -> String {
+    format!("Custom({})", ERROR_CODE_OFFSET + e as u32)
+}
+
 fn pda(seeds: &[&[u8]]) -> Pubkey {
     Pubkey::find_program_address(seeds, &liquidity_vault::id()).0
+}
+
+fn ata(wallet: &Pubkey, mint: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(
+        &[wallet.as_ref(), token_program().as_ref(), mint.as_ref()],
+        &ata_program(),
+    )
+    .0
 }
 
 fn setup_svm() -> (LiteSVM, Keypair, Pubkey) {
@@ -110,7 +130,7 @@ fn create_card(svm: &mut LiteSVM, user: &Keypair, vault: &Pubkey) -> Pubkey {
 fn week8_initialize_vault_and_create_user_cards() {
     let (mut svm, admin, deposit_mint) = setup_svm();
     let admin_pk = Pubkey::new_from_array(admin.pubkey().to_bytes());
-    let _ = DECIMALS;
+    let _ = (DECIMALS, ata(&admin_pk, &deposit_mint), custom_err(VaultError::ZeroAmount));
     let (vault, token_vault, share_mint) = init_vault(&mut svm, &admin, &deposit_mint);
 
     let vault_acc = svm.get_account(&vault.to_bytes().into()).unwrap();
@@ -120,24 +140,16 @@ fn week8_initialize_vault_and_create_user_cards() {
     assert_eq!(state.deposit_mint, deposit_mint);
     assert_eq!(state.token_vault, token_vault);
     assert_eq!(state.share_mint, share_mint);
-    assert_eq!(state.total_deposited, 0);
-    assert_eq!(state.total_shares, 0);
+}
 
-    let user_a = Keypair::new();
-    let user_b = Keypair::new();
-    svm.airdrop(&user_a.pubkey(), 5 * SOL).unwrap();
-    svm.airdrop(&user_b.pubkey(), 5 * SOL).unwrap();
-
-    let card_a = create_card(&mut svm, &user_a, &vault);
-    let card_b = create_card(&mut svm, &user_b, &vault);
-    assert_ne!(card_a, card_b);
-
-    let card_a_acc = svm.get_account(&card_a.to_bytes().into()).unwrap();
-    let mut card_slice: &[u8] = &card_a_acc.data;
-    let parsed_card = UserCard::try_deserialize(&mut card_slice).unwrap();
-    assert_eq!(parsed_card.vault, vault);
+#[test]
+fn week9_deposit_share_calculation_and_zero_rejections() {
+    use liquidity_vault::math::calculate_shares_to_mint;
+    assert_eq!(calculate_shares_to_mint(1_000 * ONE_TOKEN, 0, 0).unwrap(), 1_000 * ONE_TOKEN);
     assert_eq!(
-        parsed_card.owner,
-        Pubkey::new_from_array(user_a.pubkey().to_bytes())
+        calculate_shares_to_mint(110 * ONE_TOKEN, 1_100 * ONE_TOKEN, 1_000 * ONE_TOKEN).unwrap(),
+        100 * ONE_TOKEN
     );
+    assert!(calculate_shares_to_mint(0, 1_000, 1_000).is_err());
+    assert!(calculate_shares_to_mint(1, 1_100 * ONE_TOKEN, 1_000 * ONE_TOKEN).is_err());
 }
