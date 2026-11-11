@@ -21,8 +21,12 @@ pub mod liquidity_vault {
         instructions::create_user_card::create_user_card(ctx)
     }
 
-    /// Неделя 9: Депозит базовых токенов в vault и выпуск share-токенов пропорционально доле.
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         instructions::deposit::deposit(ctx, amount)
+    }
+
+    /// Неделя 10: Вывод средств из vault через CPI со сжиганием share-токенов и возвратом доли подписью PDA.
+    pub fn withdraw(ctx: Context<Withdraw>, shares: u64) -> Result<()> {
+        instructions::withdraw::withdraw(ctx, shares)
     }
 }

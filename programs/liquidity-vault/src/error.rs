@@ -10,6 +10,10 @@ pub enum VaultError {
     ZeroShares,
     #[msg("Arithmetic overflow or underflow in vault calculation")]
     MathOverflow,
+    #[msg("Insufficient share tokens for withdrawal")]
+    InsufficientShares,
+    #[msg("Insufficient liquid tokens in vault (close CLMM position first)")]
+    InsufficientVaultLiquidity,
     #[msg("Invalid vault or strategy token account")]
     InvalidVaultTokenAccount,
 }

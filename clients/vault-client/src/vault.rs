@@ -8,7 +8,7 @@ use anchor_lang::{
 use anyhow::{anyhow, bail, Result};
 use liquidity_vault::{
     accounts, instruction,
-    math::calculate_shares_to_mint,
+    math::{calculate_shares_to_mint, calculate_tokens_to_withdraw},
     state::{UserCard, VaultState, SHARE_MINT_SEED, USER_CARD_SEED, VAULT_SEED, VAULT_TOKEN_SEED},
 };
 use solana_keypair::Keypair;
@@ -244,5 +244,49 @@ pub fn cmd_deposit(rpc: &RpcClient, user: &Keypair, deposit_mint: &Pubkey, ui_am
         bail!("Share mint mismatch: expected {}, got {}", expected_shares, minted);
     }
     println!("Deposited {} raw, minted {} shares ({})", amount, minted, res.explorer_url);
+    Ok(())
+}
+
+/// Неделя 10: Вывод токенов из vault со сжиганием share-токенов.
+pub fn cmd_withdraw(rpc: &RpcClient, user: &Keypair, deposit_mint: &Pubkey, ui_shares: &str) -> Result<()> {
+    let user_pk = Pubkey::new_from_array(user.pubkey().to_bytes());
+    let (vault, _) = derive_vault_pda(deposit_mint);
+    let vault_state = fetch_vault_state(rpc, &vault)?;
+    let (_, decimals) = read_mint_supply_and_decimals(rpc, deposit_mint)?;
+    let shares = parse_ui_amount(ui_shares, decimals)?;
+    let (user_card, _) = derive_user_card_pda(&vault, &user_pk);
+    let user_token_account = derive_ata(&user_pk, deposit_mint, &token_program_id());
+    let user_share_account = derive_ata(&user_pk, &vault_state.share_mint, &token_program_id());
+
+    let token_before = read_token_balance(rpc, &user_token_account)?;
+    let vault_bal = read_token_balance(rpc, &vault_state.token_vault)?;
+    let (share_supply, _) = read_mint_supply_and_decimals(rpc, &vault_state.share_mint)?;
+    let expected_out = calculate_tokens_to_withdraw(shares, vault_bal, share_supply)?;
+
+    let ix = Instruction {
+        program_id: liquidity_vault::id(),
+        accounts: accounts::Withdraw {
+            user: user_pk,
+            vault,
+            user_card,
+            deposit_mint: *deposit_mint,
+            share_mint: vault_state.share_mint,
+            user_token_account,
+            token_vault: vault_state.token_vault,
+            user_share_account,
+            token_program: token_program_id(),
+        }
+        .to_account_metas(None),
+        data: instruction::Withdraw { shares }.data(),
+    };
+    let bh = rpc.get_latest_blockhash()?;
+    let msg = Message::new(&[ix], Some(&user.pubkey()));
+    let tx = Transaction::new(&[user], msg, bh.to_bytes().into());
+    let res = rpc.send_and_confirm(&tx, false)?;
+    let returned = read_token_balance(rpc, &user_token_account)?.saturating_sub(token_before);
+    if returned != expected_out {
+        bail!("Withdraw mismatch: expected {}, got {}", expected_out, returned);
+    }
+    println!("Withdrew {} raw tokens for {} shares ({})", returned, shares, res.explorer_url);
     Ok(())
 }

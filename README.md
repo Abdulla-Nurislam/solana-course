@@ -20,6 +20,9 @@ cargo run -p vault-client -- show --cluster devnet
 
 # Неделя 9: депозит 1000 токенов
 cargo run -p vault-client -- deposit --amount 1000 --cluster devnet
+
+# Неделя 10: вывод 200 share-токенов
+cargo run -p vault-client -- withdraw --shares 200 --cluster devnet
 ```
 
 ---
@@ -72,3 +75,16 @@ flowchart TD
 
 ### Транзакция Недели 9 в Solana Devnet
 - **Депозит `1000.0` токенов (`deposit`)**: [`MByYftZVVVcxMiacMW5vjQMgLzhHT5CPMau1hULKzSnoFvmBYpG7hUTEd5bh7qb5QcFrpvqhWbr4nTYuJGApQKu`](https://explorer.solana.com/tx/MByYftZVVVcxMiacMW5vjQMgLzhHT5CPMau1hULKzSnoFvmBYpG7hUTEd5bh7qb5QcFrpvqhWbr4nTYuJGApQKu?cluster=devnet)
+
+---
+
+## 5. Неделя 10 — Вывод средств (Withdraw) и CPI с подписью PDA
+
+### Схема подписей в CPI при выводе
+1. **`token::burn`** — подписывается пользователем (`CpiContext::new`).
+2. **`token::transfer_checked`** — подписывается от имени `VaultState` PDA (`CpiContext::new_with_signer`).
+3. **Формула возврата**:
+   $$\text{tokens\_out} = \left\lfloor \frac{\text{shares} \times \text{vault\_balance}}{\text{total\_shares}} \right\rfloor$$
+
+### Транзакция Недели 10 в Solana Devnet
+- **Вывод `200.0` share-токенов (`withdraw`)**: [`2N9YDXQ14WdpjpSUrrXLUyFnkE6PXZQVgD1H1tijQr2cA2zNqXQvjoWwcBbXbPUqa9GnDCDBsa9uh8kTeFVfaiFB`](https://explorer.solana.com/tx/2N9YDXQ14WdpjpSUrrXLUyFnkE6PXZQVgD1H1tijQr2cA2zNqXQvjoWwcBbXbPUqa9GnDCDBsa9uh8kTeFVfaiFB?cluster=devnet)

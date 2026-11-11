@@ -153,3 +153,15 @@ fn week9_deposit_share_calculation_and_zero_rejections() {
     assert!(calculate_shares_to_mint(0, 1_000, 1_000).is_err());
     assert!(calculate_shares_to_mint(1, 1_100 * ONE_TOKEN, 1_000 * ONE_TOKEN).is_err());
 }
+
+#[test]
+fn week10_withdraw_cpi_yield_distribution_and_error_checks() {
+    use liquidity_vault::math::{calculate_shares_to_mint, calculate_tokens_to_withdraw};
+    let shares_u1 = calculate_shares_to_mint(1_000 * ONE_TOKEN, 0, 0).unwrap();
+    let shares_u2 = calculate_shares_to_mint(110 * ONE_TOKEN, 1_100 * ONE_TOKEN, shares_u1).unwrap();
+    assert_eq!(shares_u2, 100 * ONE_TOKEN);
+
+    let out_u1 = calculate_tokens_to_withdraw(shares_u1, 1_210 * ONE_TOKEN, shares_u1 + shares_u2).unwrap();
+    assert_eq!(out_u1, 1_100 * ONE_TOKEN);
+    assert!(calculate_tokens_to_withdraw(200 * ONE_TOKEN, 110 * ONE_TOKEN, 100 * ONE_TOKEN).is_err());
+}
