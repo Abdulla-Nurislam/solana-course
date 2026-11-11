@@ -1,6 +1,7 @@
 pub mod pool;
 pub mod raydium;
 pub mod rpc;
+pub mod strategy;
 pub mod vault;
 
 use std::{env, fs, path::PathBuf, str::FromStr};
@@ -45,10 +46,14 @@ fn parse_flag_value(args: &[String], flag: &str) -> Option<String> {
         .and_then(|idx| args.get(idx + 1).cloned())
 }
 
+fn has_flag(args: &[String], flag: &str) -> bool {
+    args.iter().any(|a| a == flag)
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.is_empty() {
-        println!("Usage: vault-client <init|card|show|deposit|withdraw|create-token|create-pool|open-position|pool>");
+        println!("Usage: vault-client <init|card|show|deposit|withdraw|create-token|create-pool|open-position|pool|strategy|vault-swap>");
         return Ok(());
     }
     let command = args[0].as_str();
@@ -96,6 +101,14 @@ fn main() -> Result<()> {
         "pool" => {
             let pos = parse_flag_value(&args, "--position").map(|s| Pubkey::from_str(&s)).transpose()?;
             pool::cmd_show_pool(&rpc, &resolve_pool()?, pos.as_ref())?;
+        }
+        "strategy" => strategy::cmd_init_strategy(&rpc, &wallet, &resolve_mint()?, &resolve_sec()?, &resolve_pool()?)?,
+        "vault-swap" => {
+            let amount = parse_flag_value(&args, "--amount").ok_or_else(|| anyhow!("Missing --amount"))?;
+            let a_to_b = !has_flag(&args, "--b-to-a");
+            let slippage: u64 = parse_flag_value(&args, "--slippage-bps").unwrap_or_else(|| "100".to_string()).parse()?;
+            let reject = has_flag(&args, "--reject");
+            strategy::cmd_vault_swap(&rpc, &wallet, &resolve_mint()?, &amount, a_to_b, slippage, reject)?;
         }
         other => bail!("Unknown command '{}'", other),
     }

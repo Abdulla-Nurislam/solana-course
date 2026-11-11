@@ -29,6 +29,11 @@ cargo run -p vault-client -- create-token --decimals 6 --supply 1000000 --cluste
 cargo run -p vault-client -- create-pool --price 1.0 --cluster devnet
 cargo run -p vault-client -- open-position --amount-0 50000 --amount-1 50000 --cluster devnet
 cargo run -p vault-client -- pool --cluster devnet
+
+# Неделя 12: инициализация стратегии и обмен через CPI
+cargo run -p vault-client -- strategy --cluster devnet
+cargo run -p vault-client -- vault-swap --amount 300 --a-to-b --slippage-bps 100 --cluster devnet
+cargo run -p vault-client -- vault-swap --amount 50 --a-to-b --reject --cluster devnet
 ```
 
 ---
@@ -46,6 +51,8 @@ cargo run -p vault-client -- pool --cluster devnet
 | Конфигурация пула `AmmConfig` (`tick_spacing = 60`, 0.25%) | `B9H7TR8PSjJT7nuW2tuPkFC63z7drtMZ4LoCtD7PrCN1` | [Explorer](https://explorer.solana.com/address/B9H7TR8PSjJT7nuW2tuPkFC63z7drtMZ4LoCtD7PrCN1?cluster=devnet) |
 | Второй токен `secondary_mint` (`token_mint_1`, 6 decimals) | `EWXdK61y5MT8HfZypYJBLNj2A2paRAc5pXojcpeFkRwu` | [Explorer](https://explorer.solana.com/address/EWXdK61y5MT8HfZypYJBLNj2A2paRAc5pXojcpeFkRwu?cluster=devnet) |
 | Пул Raydium CLMM `PoolState` PDA | `DKRQA3X9R6oneVnfgXEtCZdQmPRyASYV6rLXv7dBBD3n` | [Explorer](https://explorer.solana.com/address/DKRQA3X9R6oneVnfgXEtCZdQmPRyASYV6rLXv7dBBD3n?cluster=devnet) |
+| Стратегия `Strategy` PDA | `9PdTskG24DE7AA1QbtHBpQ8Jt6ocaUTEo6v3RPucJnDB` | [Explorer](https://explorer.solana.com/address/9PdTskG24DE7AA1QbtHBpQ8Jt6ocaUTEo6v3RPucJnDB?cluster=devnet) |
+| Второе хранилище `secondary_vault` PDA | `EghNHFQ3a7JRQTgdXJXyPUHCrdhNuQcdRUpcsLEZwb7H` | [Explorer](https://explorer.solana.com/address/EghNHFQ3a7JRQTgdXJXyPUHCrdhNuQcdRUpcsLEZwb7H?cluster=devnet) |
 | Карточка пользователя `UserCard` PDA | `AGG4U9RRc41fXxBS9wjYh3tWpoZJxGEUnw87aZQ5x7WW` | [Explorer](https://explorer.solana.com/address/AGG4U9RRc41fXxBS9wjYh3tWpoZJxGEUnw87aZQ5x7WW?cluster=devnet) |
 
 ---
@@ -113,3 +120,16 @@ flowchart TD
 - **Выпуск `secondary_mint`**: [`32biTkjtKowbN1nHpFmpnpkTce4FVSF3avJfVJvPP39PQhkJsyBJYe9ubYZ65ExPNXwVucT85FkJwVrG1ayA7sFL`](https://explorer.solana.com/tx/32biTkjtKowbN1nHpFmpnpkTce4FVSF3avJfVJvPP39PQhkJsyBJYe9ubYZ65ExPNXwVucT85FkJwVrG1ayA7sFL?cluster=devnet)
 - **Создание пула Raydium CLMM (`create_pool`)**: [`3g8JzcHJev6jnXXYCpEczfvanSYVSMDF4oAnofUFhxCYFn5k87E4N1zYpuqPzh6ydGusrKQzzhHW96mqJTR672p3`](https://explorer.solana.com/tx/3g8JzcHJev6jnXXYCpEczfvanSYVSMDF4oAnofUFhxCYFn5k87E4N1zYpuqPzh6ydGusrKQzzhHW96mqJTR672p3?cluster=devnet)
 - **Открытие CLMM-позиции кошелька `[-600 .. 600]`**: [`4Hue8jjso8ULKkxziEchiiEQYXGxNWbs6MFWbkhCaFtpjmgPRStJwLzF5bTamMp24iAvmTREZ5W8qFaEd4x1k58F`](https://explorer.solana.com/tx/4Hue8jjso8ULKkxziEchiiEQYXGxNWbs6MFWbkhCaFtpjmgPRStJwLzF5bTamMp24iAvmTREZ5W8qFaEd4x1k58F?cluster=devnet)
+
+---
+
+## 7. Неделя 12 — Стратегия и Swap хранилища через CPI в Raydium CLMM
+
+### Механизм котировки и защиты от проскальзывания (`SlippageExceeded`)
+1. `init_strategy` создаёт PDA `Strategy` и второе хранилище `secondary_vault`.
+2. Перед вызовом `swap` клиент выполняет `simulateTransaction` с чтением выходного хранилища и задаёт порог `min_amount_out`.
+
+### Транзакции Недели 12 в Solana Devnet
+- **Инициализация стратегии (`init_strategy`)**: [`GFBL41QtNTT3F1oCeVexwNohtB6gra3Z4eUbbRP9VgTL9faFL5LZFMqAMAySNg9spyPBtjUYuuBKCxC8VVHtftj`](https://explorer.solana.com/tx/GFBL41QtNTT3F1oCeVexwNohtB6gra3Z4eUbbRP9VgTL9faFL5LZFMqAMAySNg9spyPBtjUYuuBKCxC8VVHtftj?cluster=devnet)
+- **Успешный CPI Swap (`300.0` Deposit → `299.195999` Secondary)**: [`2nSvsvwMxqeGzwQvmVUHzxjUDvG5oRaWCMYAxMztxCR2T6wkTdvbutjrgG9jzKvt1Esx1nhyMdZj9AZAPwjDhPKW`](https://explorer.solana.com/tx/2nSvsvwMxqeGzwQvmVUHzxjUDvG5oRaWCMYAxMztxCR2T6wkTdvbutjrgG9jzKvt1Esx1nhyMdZj9AZAPwjDhPKW?cluster=devnet)
+- **Отклонённая транзакция по защите от slippage (`Custom(6022)`)**: [`3iWWxz1PiuLi8aifVdvyEEpvH9w5hvoxUZ7YGzgdXjxuvr6vxkFN42pqWmntzcAVrVqQx8rJGACwJyPgfEWvuzn1`](https://explorer.solana.com/tx/3iWWxz1PiuLi8aifVdvyEEpvH9w5hvoxUZ7YGzgdXjxuvr6vxkFN42pqWmntzcAVrVqQx8rJGACwJyPgfEWvuzn1?cluster=devnet)

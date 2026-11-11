@@ -1,7 +1,7 @@
 [package]
 name = "liquidity-vault"
 version = "0.1.0"
-description = "Liquidity Vault — Solana DeFi vault with share tokens (Weeks 8–13)"
+description = "Liquidity Vault — Solana DeFi vault with share tokens and Raydium CLMM strategy (Weeks 8–15)"
 edition.workspace = true
 rust-version.workspace = true
 
@@ -25,6 +25,7 @@ anchor-spl = "1.2.2"
 
 [dev-dependencies]
 litesvm = "0.18.1"
+solana-account = "4.3.0"
 solana-keypair = "3.0.1"
 solana-message = "4"
 solana-signer = "3.0.0"
@@ -32,3 +33,4 @@ solana-transaction = "4"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
+

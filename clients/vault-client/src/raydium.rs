@@ -6,11 +6,11 @@ use anchor_lang::{
     system_program,
 };
 use anyhow::{anyhow, bail, Result};
-pub const POOL_STATE_DISCRIMINATOR: [u8; 8] = [247, 237, 227, 245, 215, 195, 222, 70];
-pub const PERSONAL_POSITION_DISCRIMINATOR: [u8; 8] = [70, 111, 150, 126, 230, 15, 25, 117];
-pub const OPEN_POSITION_TOKEN22_DISCRIMINATOR: [u8; 8] = [77, 255, 174, 82, 125, 29, 201, 46];
-pub const POOL_STATE_HEADER_LEN: usize = 273;
-pub const PERSONAL_POSITION_MIN_LEN: usize = 145;
+use liquidity_vault::raydium::{
+    OPEN_POSITION_TOKEN22_DISCRIMINATOR, PERSONAL_POSITION_DISCRIMINATOR,
+    PERSONAL_POSITION_MIN_LEN, POOL_STATE_DISCRIMINATOR, POOL_STATE_HEADER_LEN,
+    SWAP_V2_DISCRIMINATOR,
+};
 
 use crate::rpc::RpcClient;
 
@@ -308,6 +308,60 @@ pub fn fetch_personal_position(
         token_fees_owed_0: u64::from_le_bytes(data[129..137].try_into().unwrap()),
         token_fees_owed_1: u64::from_le_bytes(data[137..145].try_into().unwrap()),
     })
+}
+
+/// Определение `input_vault` и `output_vault` пула по входному минту.
+pub fn pool_vaults_for_input_mint(
+    pool: &ClientPoolState,
+    input_mint: &Pubkey,
+) -> Result<(Pubkey, Pubkey, Pubkey, Pubkey)> {
+    if *input_mint == pool.token_mint_0 {
+        Ok((
+            pool.token_vault_0,
+            pool.token_vault_1,
+            pool.token_mint_0,
+            pool.token_mint_1,
+        ))
+    } else if *input_mint == pool.token_mint_1 {
+        Ok((
+            pool.token_vault_1,
+            pool.token_vault_0,
+            pool.token_mint_1,
+            pool.token_mint_0,
+        ))
+    } else {
+        bail!("Mint {} does not belong to pool {}", input_mint, pool.address)
+    }
+}
+
+/// Формирование `remaining_accounts` (`[bitmap_extension, current_tick_array, adjacent_tick_array]`) для `swap_v2`.
+pub fn swap_remaining_accounts(
+    rpc: &RpcClient,
+    clmm_program: &Pubkey,
+    pool: &ClientPoolState,
+    zero_for_one: bool,
+) -> Result<Vec<AccountMeta>> {
+    let (bitmap_ext, _) = derive_tick_array_bitmap_extension(clmm_program, &pool.address);
+    let current_start = tick_array_start_index(pool.tick_current, pool.tick_spacing);
+    let (current_ta, _) = derive_tick_array(clmm_program, &pool.address, current_start);
+
+    let mut metas = vec![
+        AccountMeta::new(bitmap_ext, false),
+        AccountMeta::new(current_ta, false),
+    ];
+
+    let step = TICK_ARRAY_SIZE * (pool.tick_spacing as i32);
+    let next_start = if zero_for_one {
+        current_start - step
+    } else {
+        current_start + step
+    };
+    let (next_ta, _) = derive_tick_array(clmm_program, &pool.address, next_start);
+    if rpc.get_account(&next_ta)?.is_some() {
+        metas.push(AccountMeta::new(next_ta, false));
+    }
+
+    Ok(metas)
 }
 
 /// Сборка инструкции `create_pool` для Raydium CLMM.
