@@ -1,3 +1,5 @@
+pub mod pool;
+pub mod raydium;
 pub mod rpc;
 pub mod vault;
 
@@ -11,6 +13,8 @@ use solana_signer::Signer;
 use crate::rpc::RpcClient;
 
 pub const DEFAULT_DEPOSIT_MINT_DEVNET: &str = "wKGeYnbJWf2iqakmqFkYGcnmWHQ2roJ6jJ1664Zf2oR";
+pub const DEFAULT_SECONDARY_MINT_DEVNET: &str = "EWXdK61y5MT8HfZypYJBLNj2A2paRAc5pXojcpeFkRwu";
+pub const DEFAULT_POOL_STATE_DEVNET: &str = "DKRQA3X9R6oneVnfgXEtCZdQmPRyASYV6rLXv7dBBD3n";
 
 fn load_keypair(custom_path: Option<&str>) -> Result<Keypair> {
     let candidates: Vec<PathBuf> = if let Some(p) = custom_path {
@@ -44,7 +48,7 @@ fn parse_flag_value(args: &[String], flag: &str) -> Option<String> {
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.is_empty() {
-        println!("Usage: vault-client <init|card|show> [--mint <PUBKEY>] [--cluster devnet|localnet]");
+        println!("Usage: vault-client <init|card|show|deposit|withdraw|create-token|create-pool|open-position|pool>");
         return Ok(());
     }
     let command = args[0].as_str();
@@ -56,20 +60,42 @@ fn main() -> Result<()> {
     let bal = rpc.get_balance(&wallet_pk)?;
     println!("[RPC] cluster={} genesis={} wallet={} sol={:.4}", cluster, genesis, wallet_pk, (bal as f64) / 1e9);
 
-    let mint_str = parse_flag_value(&args, "--mint").unwrap_or_else(|| DEFAULT_DEPOSIT_MINT_DEVNET.to_string());
-    let mint = Pubkey::from_str(&mint_str).with_context(|| "Invalid --mint pubkey")?;
+    let resolve_mint = || Pubkey::from_str(&parse_flag_value(&args, "--mint").unwrap_or_else(|| DEFAULT_DEPOSIT_MINT_DEVNET.to_string())).context("Invalid --mint");
+    let resolve_sec = || Pubkey::from_str(&parse_flag_value(&args, "--secondary-mint").unwrap_or_else(|| DEFAULT_SECONDARY_MINT_DEVNET.to_string())).context("Invalid --secondary-mint");
+    let resolve_pool = || Pubkey::from_str(&parse_flag_value(&args, "--pool").unwrap_or_else(|| DEFAULT_POOL_STATE_DEVNET.to_string())).context("Invalid --pool");
 
     match command {
-        "init" => vault::cmd_init_vault(&rpc, &wallet, &mint)?,
-        "card" => vault::cmd_create_card(&rpc, &wallet, &mint)?,
-        "show" => vault::cmd_show_vault(&rpc, &wallet, &mint)?,
+        "init" => vault::cmd_init_vault(&rpc, &wallet, &resolve_mint()?)?,
+        "card" => vault::cmd_create_card(&rpc, &wallet, &resolve_mint()?)?,
+        "show" => vault::cmd_show_vault(&rpc, &wallet, &resolve_mint()?)?,
         "deposit" => {
             let amount = parse_flag_value(&args, "--amount").ok_or_else(|| anyhow!("Missing --amount"))?;
-            vault::cmd_deposit(&rpc, &wallet, &mint, &amount)?;
+            vault::cmd_deposit(&rpc, &wallet, &resolve_mint()?, &amount)?;
         }
         "withdraw" => {
             let shares = parse_flag_value(&args, "--shares").or_else(|| parse_flag_value(&args, "--amount")).ok_or_else(|| anyhow!("Missing --shares"))?;
-            vault::cmd_withdraw(&rpc, &wallet, &mint, &shares)?;
+            vault::cmd_withdraw(&rpc, &wallet, &resolve_mint()?, &shares)?;
+        }
+        "create-token" => {
+            let decimals: u8 = parse_flag_value(&args, "--decimals").unwrap_or_else(|| "6".to_string()).parse()?;
+            let supply = parse_flag_value(&args, "--supply").unwrap_or_else(|| "1000000".to_string());
+            pool::cmd_create_token(&rpc, &wallet, decimals, &supply)?;
+        }
+        "create-pool" => {
+            let price: f64 = parse_flag_value(&args, "--price").unwrap_or_else(|| "1.0".to_string()).parse()?;
+            let amm = parse_flag_value(&args, "--amm-config").map(|s| Pubkey::from_str(&s)).transpose()?;
+            pool::cmd_create_pool(&rpc, &wallet, &resolve_mint()?, &resolve_sec()?, amm, price)?;
+        }
+        "open-position" => {
+            let tl = parse_flag_value(&args, "--tick-lower").map(|s| s.parse()).transpose()?;
+            let tu = parse_flag_value(&args, "--tick-upper").map(|s| s.parse()).transpose()?;
+            let a0 = parse_flag_value(&args, "--amount-0").unwrap_or_else(|| "50000".to_string());
+            let a1 = parse_flag_value(&args, "--amount-1").unwrap_or_else(|| "50000".to_string());
+            pool::cmd_open_wallet_position(&rpc, &wallet, &resolve_pool()?, tl, tu, &a0, &a1)?;
+        }
+        "pool" => {
+            let pos = parse_flag_value(&args, "--position").map(|s| Pubkey::from_str(&s)).transpose()?;
+            pool::cmd_show_pool(&rpc, &resolve_pool()?, pos.as_ref())?;
         }
         other => bail!("Unknown command '{}'", other),
     }
