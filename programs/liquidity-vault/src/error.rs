@@ -16,10 +16,18 @@ pub enum VaultError {
     InsufficientVaultLiquidity,
     #[msg("Invalid vault or strategy token account")]
     InvalidVaultTokenAccount,
+    #[msg("Invalid Raydium CLMM program account")]
+    InvalidClmmProgram,
+    #[msg("Invalid Raydium CLMM AmmConfig account")]
+    InvalidAmmConfig,
     #[msg("Invalid Raydium CLMM PoolState account")]
     InvalidPoolState,
     #[msg("Pool token mints do not match vault deposit mint and secondary mint")]
     InvalidPoolMints,
+    #[msg("Pool token vaults do not match PoolState")]
+    InvalidPoolVaults,
+    #[msg("Minimum output threshold must be greater than zero")]
+    InvalidMinOutput,
     #[msg("Slippage tolerance exceeded: received less than minimum required")]
     SlippageExceeded,
     #[msg("Close the active CLMM position before deposit or withdraw")]

@@ -4,7 +4,8 @@
 
 Проект `liquidity-vault` выделен в самостоятельный Cargo/Anchor workspace:
 - `programs/liquidity-vault` — ончейн-программа на Anchor `1.2.0` (`anchor-spl = 1.2.2`).
-- `clients/vault-client` — CLI-клиент на Rust для управления хранилищем.
+- `clients/vault-client` — CLI-клиент на Rust без внешних TypeScript SDK для управления хранилищем, пулом Raydium CLMM, стратегией, обменами и концентрированной позицией.
+- `app/` — веб-интерфейс (Next.js 16) для недели 14 (Capstone Build Week): панель вкладчика и блок действий администратора на одной странице.
 
 ## 2. Сборка SBF и локальный валидатор / тесты
 
@@ -25,6 +26,25 @@
      --url devnet
    ```
 
-## 3. Расчёт долей (NAV)
+## 3. Архитектура PDA и владение средствами
 
-- `deposit` считает курс доли по полной стоимости хранилища (`nav::vault_value`) с виртуальной долей `+1` против атаки первого вкладчика.
+- `VaultState` (`seeds = [b"vault", deposit_mint.as_ref()]`) — центральный PDA хранилища, который выступает:
+  - `mint::authority` для `share_mint` (`seeds = [b"share_mint", vault.key().as_ref()]`);
+  - `token::authority` для основного хранилища `token_vault` (`seeds = [b"vault_token", vault.key().as_ref()]`);
+  - `token::authority` для второго хранилища `secondary_vault` (`seeds = [b"strategy_vault", vault.key().as_ref()]`);
+  - владельцем NFT-позиции Raydium CLMM (`position_nft_account`).
+- `UserCard` (`seeds = [b"user_card", vault.key().as_ref(), user.key().as_ref()]`) — персональная карточка вкладчика.
+- `Strategy` (`seeds = [b"strategy", vault.key().as_ref()]`) — привязка vault к пулу Raydium CLMM, второму токену и активной CLMM-позиции.
+
+## 4. Ручной CPI в Raydium CLMM и источник котировки
+
+- Вместо зависимости от устаревших крейтов `raydium-contract-instructions` с конфликтующими версиями `solana-program`/`anchor-lang`, модуль `programs/liquidity-vault/src/raydium.rs` формирует инструкции Raydium CLMM (`swap_v2`, `open_position_with_token22_nft`, `increase_liquidity_v2`, `decrease_liquidity_v2`, `close_position`) напрямую по 8-байтным дискриминаторам Anchor и проверяет бинарную раскладку `PoolState` и `PersonalPositionState`.
+- Перед выполнением `vault-swap`, `open-vault-position` и `close-vault-position` клиент `vault-client` выполняет `simulateTransaction` с чтением целевых токен-аккаунтов после симуляции. Из дельты балансов вычисляется точная ожидаемая сумма (`expected_out`) и задаётся порог защиты от проскальзывания (`min_amount_out = expected_out * (10_000 - slippage_bps) / 10_000`).
+- Для демонстрации отклонения по slippage (`--reject`) транзакция отправляется с `skipPreflight: true` и завышенным `min_amount_out`, чтобы отказ зафиксировался в блокчейне и был виден в Solana Explorer. Первым срабатывает порог Raydium (`TooLittleOutputReceived`, `Custom(6022)`), проверка хранилища `SlippageExceeded` (`Custom(6013)`) — вторая линия защиты.
+
+## 5. Расчёт долей (NAV)
+
+- `deposit` и `withdraw` считают курс доли по полной стоимости хранилища (`nav::vault_value`): `token_vault` + `secondary_vault` по спотовой цене пула.
+- Обе инструкции принимают аккаунты `strategy` (PDA `[b"strategy", vault]`, адрес проверяется сидами), `secondary_vault` и `pool_state`. Пока стратегия не создана, `pool_state` не читается (клиенты передают `system_program`).
+- При открытой CLMM-позиции обе инструкции отклоняются с `PositionActive`.
+
