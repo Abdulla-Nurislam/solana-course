@@ -483,3 +483,50 @@ pub fn build_open_position_with_token22_nft_ix(
     )
 }
 
+/// Сборка инструкции `swap_v2` напрямую с кошелька (для внешнего трейдера на неделе 13).
+#[allow(clippy::too_many_arguments)]
+pub fn build_wallet_swap_v2_ix(
+    clmm_program: &Pubkey,
+    payer: &Pubkey,
+    pool: &ClientPoolState,
+    input_token_account: &Pubkey,
+    output_token_account: &Pubkey,
+    input_vault: &Pubkey,
+    output_vault: &Pubkey,
+    input_mint: &Pubkey,
+    output_mint: &Pubkey,
+    remaining_accounts: Vec<AccountMeta>,
+    amount_in: u64,
+    min_amount_out: u64,
+    sqrt_price_limit_x64: u128,
+) -> Instruction {
+    let mut data = Vec::with_capacity(41);
+    data.extend_from_slice(&SWAP_V2_DISCRIMINATOR);
+    data.extend_from_slice(&amount_in.to_le_bytes());
+    data.extend_from_slice(&min_amount_out.to_le_bytes());
+    data.extend_from_slice(&sqrt_price_limit_x64.to_le_bytes());
+    data.push(1u8); // is_base_input = true
+
+    let mut accounts = vec![
+        AccountMeta::new(*payer, true),
+        AccountMeta::new_readonly(pool.amm_config, false),
+        AccountMeta::new(pool.address, false),
+        AccountMeta::new(*input_token_account, false),
+        AccountMeta::new(*output_token_account, false),
+        AccountMeta::new(*input_vault, false),
+        AccountMeta::new(*output_vault, false),
+        AccountMeta::new(pool.observation_key, false),
+        AccountMeta::new_readonly(token_program_id(), false),
+        AccountMeta::new_readonly(token_2022_program_id(), false),
+        AccountMeta::new_readonly(memo_program_id(), false),
+        AccountMeta::new_readonly(*input_mint, false),
+        AccountMeta::new_readonly(*output_mint, false),
+    ];
+    accounts.extend(remaining_accounts);
+
+    Instruction {
+        program_id: *clmm_program,
+        accounts,
+        data,
+    }
+}

@@ -214,3 +214,314 @@ pub fn invoke_swap_v2<'info>(
     Ok(())
 }
 
+/// Вызов `open_position_with_token22_nft` в Raydium CLMM через CPI.
+#[allow(clippy::too_many_arguments)]
+pub fn invoke_open_position_with_token22_nft<'info>(
+    clmm_program: &AccountInfo<'info>,
+    payer: &AccountInfo<'info>,
+    position_nft_owner: &AccountInfo<'info>,
+    position_nft_mint: &AccountInfo<'info>,
+    position_nft_account: &AccountInfo<'info>,
+    pool_state: &AccountInfo<'info>,
+    protocol_position: &AccountInfo<'info>,
+    tick_array_lower: &AccountInfo<'info>,
+    tick_array_upper: &AccountInfo<'info>,
+    personal_position: &AccountInfo<'info>,
+    token_account_0: &AccountInfo<'info>,
+    token_account_1: &AccountInfo<'info>,
+    token_vault_0: &AccountInfo<'info>,
+    token_vault_1: &AccountInfo<'info>,
+    rent: &AccountInfo<'info>,
+    system_program: &AccountInfo<'info>,
+    token_program: &AccountInfo<'info>,
+    associated_token_program: &AccountInfo<'info>,
+    token_program_2022: &AccountInfo<'info>,
+    vault_0_mint: &AccountInfo<'info>,
+    vault_1_mint: &AccountInfo<'info>,
+    remaining_accounts: &[AccountInfo<'info>],
+    tick_lower_index: i32,
+    tick_upper_index: i32,
+    tick_array_lower_start_index: i32,
+    tick_array_upper_start_index: i32,
+    liquidity: u128,
+    amount_0_max: u64,
+    amount_1_max: u64,
+    with_metadata: bool,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let mut data = Vec::with_capacity(8 + 16 + 16 + 16 + 2);
+    data.extend_from_slice(&OPEN_POSITION_TOKEN22_DISCRIMINATOR);
+    data.extend_from_slice(&tick_lower_index.to_le_bytes());
+    data.extend_from_slice(&tick_upper_index.to_le_bytes());
+    data.extend_from_slice(&tick_array_lower_start_index.to_le_bytes());
+    data.extend_from_slice(&tick_array_upper_start_index.to_le_bytes());
+    data.extend_from_slice(&liquidity.to_le_bytes());
+    data.extend_from_slice(&amount_0_max.to_le_bytes());
+    data.extend_from_slice(&amount_1_max.to_le_bytes());
+    data.push(u8::from(with_metadata));
+    data.push(0u8); // base_flag = None
+
+    let mut metas = Vec::with_capacity(20 + remaining_accounts.len());
+    metas.push(AccountMeta::new(*payer.key, true));
+    metas.push(AccountMeta::new_readonly(*position_nft_owner.key, false));
+    metas.push(AccountMeta::new(*position_nft_mint.key, true));
+    metas.push(AccountMeta::new(*position_nft_account.key, false));
+    metas.push(AccountMeta::new(*pool_state.key, false));
+    metas.push(AccountMeta::new(*protocol_position.key, false));
+    metas.push(AccountMeta::new(*tick_array_lower.key, false));
+    metas.push(AccountMeta::new(*tick_array_upper.key, false));
+    metas.push(AccountMeta::new(*personal_position.key, false));
+    metas.push(AccountMeta::new(*token_account_0.key, false));
+    metas.push(AccountMeta::new(*token_account_1.key, false));
+    metas.push(AccountMeta::new(*token_vault_0.key, false));
+    metas.push(AccountMeta::new(*token_vault_1.key, false));
+    metas.push(AccountMeta::new_readonly(*rent.key, false));
+    metas.push(AccountMeta::new_readonly(*system_program.key, false));
+    metas.push(AccountMeta::new_readonly(*token_program.key, false));
+    metas.push(AccountMeta::new_readonly(*associated_token_program.key, false));
+    metas.push(AccountMeta::new_readonly(*token_program_2022.key, false));
+    metas.push(AccountMeta::new_readonly(*vault_0_mint.key, false));
+    metas.push(AccountMeta::new_readonly(*vault_1_mint.key, false));
+
+    let mut infos = Vec::with_capacity(20 + remaining_accounts.len());
+    infos.push(payer.clone());
+    infos.push(position_nft_owner.clone());
+    infos.push(position_nft_mint.clone());
+    infos.push(position_nft_account.clone());
+    infos.push(pool_state.clone());
+    infos.push(protocol_position.clone());
+    infos.push(tick_array_lower.clone());
+    infos.push(tick_array_upper.clone());
+    infos.push(personal_position.clone());
+    infos.push(token_account_0.clone());
+    infos.push(token_account_1.clone());
+    infos.push(token_vault_0.clone());
+    infos.push(token_vault_1.clone());
+    infos.push(rent.clone());
+    infos.push(system_program.clone());
+    infos.push(token_program.clone());
+    infos.push(associated_token_program.clone());
+    infos.push(token_program_2022.clone());
+    infos.push(vault_0_mint.clone());
+    infos.push(vault_1_mint.clone());
+
+    for acc in remaining_accounts {
+        metas.push(if acc.is_writable {
+            AccountMeta::new(*acc.key, acc.is_signer)
+        } else {
+            AccountMeta::new_readonly(*acc.key, acc.is_signer)
+        });
+        infos.push(acc.clone());
+    }
+
+    let ix = Instruction {
+        program_id: *clmm_program.key,
+        accounts: metas,
+        data,
+    };
+    invoke_signed(&ix, &infos, signer_seeds)?;
+    Ok(())
+}
+
+/// Вызов `increase_liquidity_v2` в Raydium CLMM через CPI с подписью PDA.
+#[allow(clippy::too_many_arguments)]
+pub fn invoke_increase_liquidity_v2<'info>(
+    clmm_program: &AccountInfo<'info>,
+    nft_owner: &AccountInfo<'info>,
+    nft_account: &AccountInfo<'info>,
+    pool_state: &AccountInfo<'info>,
+    protocol_position: &AccountInfo<'info>,
+    personal_position: &AccountInfo<'info>,
+    tick_array_lower: &AccountInfo<'info>,
+    tick_array_upper: &AccountInfo<'info>,
+    token_account_0: &AccountInfo<'info>,
+    token_account_1: &AccountInfo<'info>,
+    token_vault_0: &AccountInfo<'info>,
+    token_vault_1: &AccountInfo<'info>,
+    token_program: &AccountInfo<'info>,
+    token_program_2022: &AccountInfo<'info>,
+    vault_0_mint: &AccountInfo<'info>,
+    vault_1_mint: &AccountInfo<'info>,
+    liquidity: u128,
+    amount_0_max: u64,
+    amount_1_max: u64,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let mut data = Vec::with_capacity(8 + 16 + 8 + 8 + 1);
+    data.extend_from_slice(&INCREASE_LIQUIDITY_V2_DISCRIMINATOR);
+    data.extend_from_slice(&liquidity.to_le_bytes());
+    data.extend_from_slice(&amount_0_max.to_le_bytes());
+    data.extend_from_slice(&amount_1_max.to_le_bytes());
+    data.push(0u8); // base_flag = None
+
+    let metas = vec![
+        AccountMeta::new_readonly(*nft_owner.key, true),
+        AccountMeta::new_readonly(*nft_account.key, false),
+        AccountMeta::new(*pool_state.key, false),
+        AccountMeta::new(*protocol_position.key, false),
+        AccountMeta::new(*personal_position.key, false),
+        AccountMeta::new(*tick_array_lower.key, false),
+        AccountMeta::new(*tick_array_upper.key, false),
+        AccountMeta::new(*token_account_0.key, false),
+        AccountMeta::new(*token_account_1.key, false),
+        AccountMeta::new(*token_vault_0.key, false),
+        AccountMeta::new(*token_vault_1.key, false),
+        AccountMeta::new_readonly(*token_program.key, false),
+        AccountMeta::new_readonly(*token_program_2022.key, false),
+        AccountMeta::new_readonly(*vault_0_mint.key, false),
+        AccountMeta::new_readonly(*vault_1_mint.key, false),
+    ];
+
+    let infos = vec![
+        nft_owner.clone(),
+        nft_account.clone(),
+        pool_state.clone(),
+        protocol_position.clone(),
+        personal_position.clone(),
+        tick_array_lower.clone(),
+        tick_array_upper.clone(),
+        token_account_0.clone(),
+        token_account_1.clone(),
+        token_vault_0.clone(),
+        token_vault_1.clone(),
+        token_program.clone(),
+        token_program_2022.clone(),
+        vault_0_mint.clone(),
+        vault_1_mint.clone(),
+    ];
+
+    let ix = Instruction {
+        program_id: *clmm_program.key,
+        accounts: metas,
+        data,
+    };
+    invoke_signed(&ix, &infos, signer_seeds)?;
+    Ok(())
+}
+
+/// Вызов `decrease_liquidity_v2` в Raydium CLMM через CPI с подписью PDA.
+#[allow(clippy::too_many_arguments)]
+pub fn invoke_decrease_liquidity_v2<'info>(
+    clmm_program: &AccountInfo<'info>,
+    nft_owner: &AccountInfo<'info>,
+    nft_account: &AccountInfo<'info>,
+    personal_position: &AccountInfo<'info>,
+    pool_state: &AccountInfo<'info>,
+    protocol_position: &AccountInfo<'info>,
+    token_vault_0: &AccountInfo<'info>,
+    token_vault_1: &AccountInfo<'info>,
+    tick_array_lower: &AccountInfo<'info>,
+    tick_array_upper: &AccountInfo<'info>,
+    recipient_token_account_0: &AccountInfo<'info>,
+    recipient_token_account_1: &AccountInfo<'info>,
+    token_program: &AccountInfo<'info>,
+    token_program_2022: &AccountInfo<'info>,
+    memo_program: &AccountInfo<'info>,
+    vault_0_mint: &AccountInfo<'info>,
+    vault_1_mint: &AccountInfo<'info>,
+    remaining_accounts: &[AccountInfo<'info>],
+    liquidity: u128,
+    amount_0_min: u64,
+    amount_1_min: u64,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let mut data = Vec::with_capacity(8 + 16 + 8 + 8);
+    data.extend_from_slice(&DECREASE_LIQUIDITY_V2_DISCRIMINATOR);
+    data.extend_from_slice(&liquidity.to_le_bytes());
+    data.extend_from_slice(&amount_0_min.to_le_bytes());
+    data.extend_from_slice(&amount_1_min.to_le_bytes());
+
+    let mut metas = Vec::with_capacity(16 + remaining_accounts.len());
+    metas.push(AccountMeta::new_readonly(*nft_owner.key, true));
+    metas.push(AccountMeta::new_readonly(*nft_account.key, false));
+    metas.push(AccountMeta::new(*personal_position.key, false));
+    metas.push(AccountMeta::new(*pool_state.key, false));
+    metas.push(AccountMeta::new(*protocol_position.key, false));
+    metas.push(AccountMeta::new(*token_vault_0.key, false));
+    metas.push(AccountMeta::new(*token_vault_1.key, false));
+    metas.push(AccountMeta::new(*tick_array_lower.key, false));
+    metas.push(AccountMeta::new(*tick_array_upper.key, false));
+    metas.push(AccountMeta::new(*recipient_token_account_0.key, false));
+    metas.push(AccountMeta::new(*recipient_token_account_1.key, false));
+    metas.push(AccountMeta::new_readonly(*token_program.key, false));
+    metas.push(AccountMeta::new_readonly(*token_program_2022.key, false));
+    metas.push(AccountMeta::new_readonly(*memo_program.key, false));
+    metas.push(AccountMeta::new_readonly(*vault_0_mint.key, false));
+    metas.push(AccountMeta::new_readonly(*vault_1_mint.key, false));
+
+    let mut infos = Vec::with_capacity(16 + remaining_accounts.len());
+    infos.push(nft_owner.clone());
+    infos.push(nft_account.clone());
+    infos.push(personal_position.clone());
+    infos.push(pool_state.clone());
+    infos.push(protocol_position.clone());
+    infos.push(token_vault_0.clone());
+    infos.push(token_vault_1.clone());
+    infos.push(tick_array_lower.clone());
+    infos.push(tick_array_upper.clone());
+    infos.push(recipient_token_account_0.clone());
+    infos.push(recipient_token_account_1.clone());
+    infos.push(token_program.clone());
+    infos.push(token_program_2022.clone());
+    infos.push(memo_program.clone());
+    infos.push(vault_0_mint.clone());
+    infos.push(vault_1_mint.clone());
+
+    for acc in remaining_accounts {
+        metas.push(if acc.is_writable {
+            AccountMeta::new(*acc.key, acc.is_signer)
+        } else {
+            AccountMeta::new_readonly(*acc.key, acc.is_signer)
+        });
+        infos.push(acc.clone());
+    }
+
+    let ix = Instruction {
+        program_id: *clmm_program.key,
+        accounts: metas,
+        data,
+    };
+    invoke_signed(&ix, &infos, signer_seeds)?;
+    Ok(())
+}
+
+/// Вызов `close_position` в Raydium CLMM через CPI с подписью PDA.
+pub fn invoke_close_position<'info>(
+    clmm_program: &AccountInfo<'info>,
+    nft_owner: &AccountInfo<'info>,
+    position_nft_mint: &AccountInfo<'info>,
+    position_nft_account: &AccountInfo<'info>,
+    personal_position: &AccountInfo<'info>,
+    system_program: &AccountInfo<'info>,
+    token_program_2022: &AccountInfo<'info>,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<()> {
+    let data = CLOSE_POSITION_DISCRIMINATOR.to_vec();
+
+    let metas = vec![
+        AccountMeta::new(*nft_owner.key, true),
+        AccountMeta::new(*position_nft_mint.key, false),
+        AccountMeta::new(*position_nft_account.key, false),
+        AccountMeta::new(*personal_position.key, false),
+        AccountMeta::new_readonly(*system_program.key, false),
+        AccountMeta::new_readonly(*token_program_2022.key, false),
+    ];
+
+    let infos = vec![
+        nft_owner.clone(),
+        position_nft_mint.clone(),
+        position_nft_account.clone(),
+        personal_position.clone(),
+        system_program.clone(),
+        token_program_2022.clone(),
+    ];
+
+    let ix = Instruction {
+        program_id: *clmm_program.key,
+        accounts: metas,
+        data,
+    };
+    invoke_signed(&ix, &infos, signer_seeds)?;
+    Ok(())
+}
+
