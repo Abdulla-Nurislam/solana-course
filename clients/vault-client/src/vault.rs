@@ -5,10 +5,14 @@ use anchor_lang::{
     solana_program::instruction::Instruction,
     system_program, AccountDeserialize, InstructionData, ToAccountMetas,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use liquidity_vault::{
     accounts, instruction,
-    state::{UserCard, VaultState, SHARE_MINT_SEED, USER_CARD_SEED, VAULT_SEED, VAULT_TOKEN_SEED},
+    math::calculate_shares_to_mint,
+    state::{
+        UserCard, VaultState, SHARE_MINT_SEED, STRATEGY_SEED, STRATEGY_VAULT_SEED,
+        USER_CARD_SEED, VAULT_SEED, VAULT_TOKEN_SEED,
+    },
 };
 use solana_keypair::Keypair;
 use solana_message::Message;
@@ -19,6 +23,10 @@ use crate::rpc::RpcClient;
 
 pub fn token_program_id() -> Pubkey {
     Pubkey::from_str("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").unwrap()
+}
+
+pub fn ata_program_id() -> Pubkey {
+    Pubkey::from_str("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL").unwrap()
 }
 
 pub fn rent_sysvar_id() -> Pubkey {
@@ -42,6 +50,62 @@ pub fn derive_user_card_pda(vault: &Pubkey, user: &Pubkey) -> (Pubkey, u8) {
         &[USER_CARD_SEED, vault.as_ref(), user.as_ref()],
         &liquidity_vault::id(),
     )
+}
+
+pub fn derive_strategy_pda(vault: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[STRATEGY_SEED, vault.as_ref()], &liquidity_vault::id())
+}
+
+pub fn derive_secondary_vault_pda(vault: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[STRATEGY_VAULT_SEED, vault.as_ref()], &liquidity_vault::id())
+}
+
+pub fn derive_ata(wallet: &Pubkey, mint: &Pubkey, token_program: &Pubkey) -> Pubkey {
+    Pubkey::find_program_address(
+        &[wallet.as_ref(), token_program.as_ref(), mint.as_ref()],
+        &ata_program_id(),
+    )
+    .0
+}
+
+pub fn parse_ui_amount(input: &str, decimals: u8) -> Result<u64> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        bail!("Empty amount");
+    }
+    let parts: Vec<&str> = trimmed.split('.').collect();
+    if parts.len() > 2 {
+        bail!("Invalid decimal: {}", input);
+    }
+    let whole: u128 = if parts[0].is_empty() { 0 } else { parts[0].parse()? };
+    let scale = 10u128.pow(decimals as u32);
+    let frac: u128 = if parts.len() == 2 {
+        if parts[1].len() > decimals as usize {
+            bail!("Too many decimal places in {}", input);
+        }
+        let padded = format!("{:0<width$}", parts[1], width = decimals as usize);
+        if padded.is_empty() { 0 } else { padded.parse()? }
+    } else {
+        0
+    };
+    let raw = whole.checked_mul(scale).and_then(|w| w.checked_add(frac)).ok_or_else(|| anyhow!("Overflow"))?;
+    Ok(u64::try_from(raw)?)
+}
+
+pub fn read_mint_supply_and_decimals(rpc: &RpcClient, mint: &Pubkey) -> Result<(u64, u8)> {
+    let data = rpc.get_account_data(mint)?.ok_or_else(|| anyhow!("Mint not found: {}", mint))?;
+    if data.len() < 82 {
+        bail!("Invalid Mint length");
+    }
+    Ok((u64::from_le_bytes(data[36..44].try_into().unwrap()), data[44]))
+}
+
+pub fn read_token_balance(rpc: &RpcClient, token_account: &Pubkey) -> Result<u64> {
+    match rpc.get_account_data(token_account)? {
+        Some(data) if data.len() >= 72 => Ok(u64::from_le_bytes(data[64..72].try_into().unwrap())),
+        Some(_) => bail!("Invalid TokenAccount length"),
+        None => Ok(0),
+    }
 }
 
 pub fn fetch_vault_state(rpc: &RpcClient, vault: &Pubkey) -> Result<VaultState> {
@@ -121,5 +185,53 @@ pub fn cmd_show_vault(rpc: &RpcClient, user: &Keypair, deposit_mint: &Pubkey) ->
     let card = fetch_user_card(rpc, &card_pda)?;
     println!("VaultState: {} (shares={})", vault_pda, state.total_shares);
     println!("UserCard  : {} (exists={})", card_pda, card.is_some());
+    Ok(())
+}
+
+pub fn cmd_deposit(rpc: &RpcClient, user: &Keypair, deposit_mint: &Pubkey, ui_amount: &str) -> Result<()> {
+    let user_pk = Pubkey::new_from_array(user.pubkey().to_bytes());
+    let (vault, _) = derive_vault_pda(deposit_mint);
+    let vault_state = fetch_vault_state(rpc, &vault)?;
+    let (_, decimals) = read_mint_supply_and_decimals(rpc, deposit_mint)?;
+    let amount = parse_ui_amount(ui_amount, decimals)?;
+    let (user_card, _) = derive_user_card_pda(&vault, &user_pk);
+    let user_token_account = derive_ata(&user_pk, deposit_mint, &token_program_id());
+    let user_share_account = derive_ata(&user_pk, &vault_state.share_mint, &token_program_id());
+
+    let shares_before = read_token_balance(rpc, &user_share_account)?;
+    let vault_bal = read_token_balance(rpc, &vault_state.token_vault)?;
+    let (share_supply, _) = read_mint_supply_and_decimals(rpc, &vault_state.share_mint)?;
+    let expected_shares = calculate_shares_to_mint(amount, vault_bal, share_supply)?;
+
+    let ix = Instruction {
+        program_id: liquidity_vault::id(),
+        accounts: accounts::Deposit {
+            user: user_pk,
+            vault,
+            user_card,
+            deposit_mint: *deposit_mint,
+            share_mint: vault_state.share_mint,
+            user_token_account,
+            token_vault: vault_state.token_vault,
+            user_share_account,
+            token_program: token_program_id(),
+            associated_token_program: ata_program_id(),
+            system_program: system_program::ID,
+            strategy: derive_strategy_pda(&vault).0,
+            secondary_vault: derive_secondary_vault_pda(&vault).0,
+            pool_state: system_program::ID,
+        }
+        .to_account_metas(None),
+        data: instruction::Deposit { amount }.data(),
+    };
+    let bh = rpc.get_latest_blockhash()?;
+    let msg = Message::new(&[ix], Some(&user.pubkey()));
+    let tx = Transaction::new(&[user], msg, bh.to_bytes().into());
+    let res = rpc.send_and_confirm(&tx)?;
+    let minted = read_token_balance(rpc, &user_share_account)?.saturating_sub(shares_before);
+    if minted != expected_shares {
+        bail!("Share mint mismatch: expected {}, got {}", expected_shares, minted);
+    }
+    println!("Deposited {} raw, minted {} shares ({})", amount, minted, res.explorer_url);
     Ok(())
 }

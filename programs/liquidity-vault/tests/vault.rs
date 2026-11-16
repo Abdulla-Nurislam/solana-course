@@ -118,3 +118,17 @@ fn week8_initialize_vault_and_create_user_cards() {
     assert_eq!(parsed_card.vault, vault);
     assert_eq!(parsed_card.owner, user_pk);
 }
+
+#[test]
+fn week9_deposit_share_calculation_and_zero_rejections() {
+    use liquidity_vault::math::calculate_shares_to_mint;
+    const ONE_TOKEN: u64 = 1_000_000;
+
+    assert_eq!(calculate_shares_to_mint(1_000 * ONE_TOKEN, 0, 0).unwrap(), 1_000 * ONE_TOKEN);
+    assert_eq!(
+        calculate_shares_to_mint(110 * ONE_TOKEN, 1_100 * ONE_TOKEN, 1_000 * ONE_TOKEN).unwrap(),
+        100 * ONE_TOKEN
+    );
+    assert!(calculate_shares_to_mint(0, 1_000, 1_000).is_err());
+    assert!(calculate_shares_to_mint(1, 1_100 * ONE_TOKEN, 1_000 * ONE_TOKEN).is_err());
+}
