@@ -65,6 +65,11 @@ fn main() -> Result<()> {
             let amount = parse_flag_value(&args, "--amount").ok_or_else(|| anyhow!("Missing --amount"))?;
             vault::cmd_deposit(&rpc, &wallet, &mint, &amount)?;
         }
+        "withdraw" => {
+            let shares = parse_flag_value(&args, "--shares").or_else(|| parse_flag_value(&args, "--amount")).ok_or_else(|| anyhow!("Missing --shares"))?;
+            let slippage_bps: u64 = parse_flag_value(&args, "--slippage-bps").unwrap_or_else(|| "50".to_string()).parse()?;
+            vault::cmd_withdraw(&rpc, &wallet, &mint, &shares, slippage_bps)?;
+        }
         other => bail!("Unknown command '{}'", other),
     }
     Ok(())
