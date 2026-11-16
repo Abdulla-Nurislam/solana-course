@@ -1,0 +1,13 @@
+target/
+.anchor/
+node_modules/
+.keys/
+*.so
+*-keypair.json
+.DS_Store
+
+.next/
+*.tsbuildinfo
+next-env.d.ts
+Commit_Guide.md
+docs/AI/demo-day-and-defense.md
